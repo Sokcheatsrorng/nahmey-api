@@ -1,3 +1,4 @@
+from getpass import getuser
 from fastapi import FastAPI, Query, HTTPException, Depends, status, Body, Path, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -43,6 +44,52 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="Nhame EY API",
+        version="1.0.0",
+        description="An API for getting personalized food recommendations, restaurant listings, and more",
+        routes=app.routes,
+    )
+    # Customize the security scheme to only use Bearer tokens
+    openapi_schema["components"]["securitySchemes"]["OAuth2PasswordBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your Bearer token in the format: Bearer <token>"
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="Nhame EY API",
+        version="1.0.0",
+        description="An API for getting personalized food recommendations, restaurant listings, and more",
+        routes=app.routes,
+    )
+    # Customize the security scheme to only use Bearer tokens
+    openapi_schema["components"]["securitySchemes"]["OAuth2PasswordBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your Bearer token in the format: Bearer <token>"
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 # Mount the uploads directory to serve files
 if os.path.exists("uploads"):
     app.mount("/files", StaticFiles(directory="uploads"), name="files")
@@ -59,7 +106,7 @@ app.add_middleware(
 # Security configuration
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7" 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 43200 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -153,9 +200,17 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     profile_picture: Optional[str] = None
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    username: str
+    email: EmailStr
     password: str
-    preferences: Optional[UserPreferences] = None
+    confirm_password: str
+
+    @validator("confirm_password")
+    def passwords_match(cls, confirm_password, values):
+        if "password" in values and confirm_password != values["password"]:
+            raise ValueError("Passwords do not match")
+        return confirm_password
 
 class User(UserBase):
     id: str
@@ -1448,14 +1503,14 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_user(username: str):
-    if username in users_db:
-        user_dict = users_db[username]
-        return user_dict
+def get_user_by_email(email: str):
+    for user in users_db.values():
+        if user.email == email:
+            return user
     return None
 
-def authenticate_user(username: str, password: str):
-    user = get_user(username)
+def authenticate_user(email: str, password: str):
+    user = get_user_by_email(email)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -1480,13 +1535,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        email: str = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(username=email)
     except jwt.PyJWTError:
         raise credentials_exception
-    user = get_user(username=token_data.username)
+    user = get_user_by_email(email=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -1515,46 +1570,44 @@ def update_trending_status():
     pass
 
 # API endpoints
-@app.post("/token", response_model=Token, tags=["Authentication"])
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
+@app.post("/login", response_model=Token, tags=["Authentication"])
+async def login_for_access_token(email: str = Form(...), password: str = Form(...)):
+    user = authenticate_user(email, password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "role": user.role}, expires_delta=access_token_expires
+        data={"sub": user.email, "role": user.role}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer", "user": user}
 
 @app.post("/register", response_model=User, tags=["Authentication"])
 async def register_user(user: UserCreate):
-    if user.username in users_db:
+    # Check if the username or email is already registered
+    if user.username in users_db or any(u.email == user.email for u in users_db.values()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail="Username or email already registered"
         )
     
     user_id = str(uuid.uuid4())
     hashed_password = get_password_hash(user.password)
     
-    # Set default preferences if not provided
-    if not user.preferences:
-        user.preferences = UserPreferences()
-    
+    # Create the new user
     db_user = UserInDB(
         id=user_id,
         email=user.email,
         username=user.username,
-        full_name=user.full_name,
+        full_name=None,  # Optional field
         hashed_password=hashed_password,
         role=UserRole.USER,  # Default role is USER
         created_at=datetime.now(),
-        preferences=user.preferences,
-        profile_picture=user.profile_picture
+        preferences=UserPreferences(),  # Default preferences
+        profile_picture=None  # Optional field
     )
     
     users_db[user.username] = db_user
