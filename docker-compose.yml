@@ -1,0 +1,31 @@
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8000"
+    volumes:
+      - ./:/app
+      - uploads_data:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql://nhamey_user:nhamey_2025@db:5432/nhamey_db
+    depends_on:
+      - db
+
+  db:
+    image: postgres:14
+    ports:
+      - "10000:5432"
+    environment:
+      - POSTGRES_USER=nhamey_user
+      - POSTGRES_PASSWORD=nhamey_2025
+      - POSTGRES_DB=nhamey_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
+  uploads_data:
+
