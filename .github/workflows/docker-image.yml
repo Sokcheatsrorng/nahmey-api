@@ -1,0 +1,44 @@
+name: Deploy FastAPI App to Remote Docker Host
+
+on:
+  push:
+    branches:
+      - main  # Adjust to your branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t fastapi-app .
+
+      - name: Save Docker image to tar file
+        run: docker save fastapi-app:latest -o fastapi-app.tar
+
+      - name: Copy image to remote server via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "fastapi-app.tar"
+          target: "~/"
+
+      - name: SSH and deploy container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            docker load -i ~/fastapi-app.tar
+            docker stop fastapi-app || true
+            docker rm fastapi-app || true
+            docker run -d --name fastapi-app -p 8000:8000 -v ~/uploads:/app/uploads fastapi-app:latest
