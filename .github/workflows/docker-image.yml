@@ -22,14 +22,55 @@ jobs:
       - name: Save Docker image to tar file
         run: docker save fastapi-app:latest -o fastapi-app.tar
 
-      - name: SSH and deploy container
+      - name: Copy Docker image to remote server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "fastapi-app.tar"
+          target: "~/"
+
+      - name: Deploy container on remote server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # Load the Docker image
             docker load -i ~/fastapi-app.tar
+            
+            # Stop and remove existing container if it exists
             docker stop fastapi-app || true
             docker rm fastapi-app || true
-            docker run -d --name fastapi-app -p 8000:8000 -v ~/uploads:/app/uploads fastapi-app:latest
+            
+            # Remove old images to save space (optional)
+            docker image prune -f
+            
+            # Create uploads directory if it doesn't exist
+            mkdir -p ~/uploads
+            
+            # Run the new container
+            docker run -d \
+              --name fastapi-app \
+              -p 8000:8000 \
+              -v ~/uploads:/app/uploads \
+              --restart unless-stopped \
+              fastapi-app:latest
+            
+            # Cleanup the tar file
+            rm -f ~/fastapi-app.tar
+            
+            # Verify container is running
+            sleep 5
+            if docker ps | grep -q fastapi-app; then
+              echo "✅ Container deployed successfully"
+            else
+              echo "❌ Container deployment failed"
+              docker logs fastapi-app
+              exit 1
+            fi
+
+      - name: Cleanup local tar file
+        run: rm -f fastapi-app.tar
