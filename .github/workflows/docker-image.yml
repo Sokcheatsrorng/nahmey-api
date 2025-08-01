@@ -3,7 +3,7 @@ name: Deploy FastAPI App to Remote Docker Host
 on:
   push:
     branches:
-      - main  # Adjust to your branch
+      - main  
 
 jobs:
   deploy:
@@ -21,15 +21,6 @@ jobs:
 
       - name: Save Docker image to tar file
         run: docker save fastapi-app:latest -o fastapi-app.tar
-
-      - name: Copy image to remote server via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "fastapi-app.tar"
-          target: "~/"
 
       - name: SSH and deploy container
         uses: appleboy/ssh-action@v1.0.3
