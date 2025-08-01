@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8085:8000"
+      - "3005:8000"
     volumes:
       - ./:/app
       - uploads_data:/app/uploads
@@ -17,7 +17,7 @@ services:
   db:
     image: postgres:14
     ports:
-      - "10000:5432"
+      - "3006:5432"
     environment:
       - POSTGRES_USER=nhamey_user
       - POSTGRES_PASSWORD=nhamey_2025

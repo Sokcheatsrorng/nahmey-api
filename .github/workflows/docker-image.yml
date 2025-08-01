@@ -34,9 +34,9 @@ jobs:
       - name: Deploy container on remote server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: sokcheat@202.178.125.77
+          username: sokcheat
+          key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQTOLR1Vml+TCcOFcVAMTXofWuochaPvFUZA78V8pm+ admin@MSI
           script: |
             # Load the Docker image
             docker load -i ~/nahmey-api-api.tar
@@ -54,7 +54,7 @@ jobs:
             # Run the new container
             docker run -d \
               --name nahmey-api-api \
-              -p 8000:8000 \
+              -p 3005:8000 \
               -v ~/uploads:/app/uploads \
               --restart unless-stopped \
               nahmey-api-api:latest
