@@ -25,18 +25,18 @@ jobs:
       - name: Copy Docker image to remote server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: 202.178.125.77
+          username: sokcheat
+          password: Cheat123
           source: "nahmey-api-api.tar"
           target: "~/"
 
       - name: Deploy container on remote server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: sokcheat@202.178.125.77
+          host: 202.178.125.77
           username: sokcheat
-          key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQTOLR1Vml+TCcOFcVAMTXofWuochaPvFUZA78V8pm+ admin@MSI
+          password: Cheat123
           script: |
             # Load the Docker image
             docker load -i ~/nahmey-api-api.tar
@@ -45,8 +45,6 @@ jobs:
             docker stop nahmey-api-api || true
             docker rm nahmey-api-api || true
             
-            # Remove old images to save space (optional)
-            docker image prune -f
             
             # Create uploads directory if it doesn't exist
             mkdir -p ~/uploads
